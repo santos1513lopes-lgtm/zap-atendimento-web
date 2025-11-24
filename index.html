@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>ZapDesk - Atendimento</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'zap-green': '#00a884',
+            'zap-bg': '#efeae2',
+            'zap-sidebar': '#ffffff',
+            'zap-incoming': '#ffffff',
+            'zap-outgoing': '#d9fdd3',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { font-family: 'Segoe UI', Helvetica, Arial, sans-serif; background: #d1d7db; overflow: hidden; }
+    .app-container { height: 100vh; width: 100%; max-width: 1600px; margin: 0 auto; display: flex; overflow: hidden; position: relative; }
+    
+    /* ÁREA LATERAL (CONTATOS) */
+    .sidebar { width: 400px; background: white; border-right: 1px solid #e9edef; display: flex; flex-direction: column; }
+    .contact-item { display: flex; align-items: center; padding: 12px; cursor: pointer; border-bottom: 1px solid #f0f2f5; transition: 0.2s; }
+    .contact-item:hover { background: #f5f6f6; }
+    .contact-item.active { background: #f0f2f5; }
+    .avatar { width: 49px; height: 49px; border-radius: 50%; background: #dfe5e7; display: flex; align-items: center; justify-content: center; font-size: 20px; color: white; margin-right: 15px; flex-shrink: 0; }
+    
+    /* ÁREA DO CHAT */
+    .chat-area { flex: 1; display: flex; flex-direction: column; background: #efeae2; position: relative; }
+    .chat-header { height: 60px; background: #f0f2f5; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-left: 1px solid #d1d7db; }
+    .messages-container { flex: 1; overflow-y: auto; padding: 20px 5%; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-opacity: 0.4; }
+    
+    /* BALÕES DE MENSAGEM */
+    .msg { max-width: 65%; padding: 6px 7px 8px 9px; border-radius: 7.5px; position: relative; margin-bottom: 10px; font-size: 14.2px; line-height: 19px; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
+    .msg-in { background: white; align-self: flex-start; border-top-left-radius: 0; }
+    .msg-out { background: #d9fdd3; align-self: flex-end; border-top-right-radius: 0; margin-left: auto; }
+    .msg-time { font-size: 11px; color: #667781; float: right; margin-left: 10px; margin-top: 5px; }
+
+    /* INPUT AREA */
+    .input-area { height: 62px; background: #f0f2f5; padding: 10px; display: flex; align-items: center; gap: 10px; }
+    .chat-input { flex: 1; padding: 9px 12px; border-radius: 8px; border: none; outline: none; font-size: 15px; }
+
+    /* MOBILE */
+    @media (max-width: 768px) {
+      .app-container { position: relative; }
+      .sidebar { width: 100%; position: absolute; z-index: 10; height: 100%; transition: transform 0.3s; }
+      .chat-area { width: 100%; position: absolute; z-index: 20; height: 100%; transform: translateX(100%); transition: transform 0.3s; }
+      
+      /* Classes para alternar telas no mobile */
+      .show-chat .sidebar { transform: translateX(-100%); }
+      .show-chat .chat-area { transform: translateX(0); }
+      
+      body { background: white; }
+      .app-container { max-width: 100%; height: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="login-screen" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-50">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+      <h1 class="text-2xl font-bold text-center text-teal-600 mb-6">ZapDesk <i class="fab fa-whatsapp"></i></h1>
+      <input id="email" placeholder="E-mail" class="w-full p-3 border rounded mb-3" />
+      <input id="password" type="password" placeholder="Senha" class="w-full p-3 border rounded mb-4" />
+      <button id="btn-login" class="w-full bg-teal-600 text-white p-3 rounded font-bold hover:bg-teal-700 transition">Entrar</button>
+      <p id="login-msg" class="text-center text-red-500 text-xs mt-2"></p>
+    </div>
+  </div>
+
+  <div id="app-screen" class="app-container hidden">
+    
+    <aside class="sidebar">
+      <div class="h-[60px] bg-[#f0f2f5] flex items-center justify-between px-4 border-r border-[#d1d7db]">
+        <div class="font-bold text-gray-600">Atendimentos</div>
+        <button id="btn-logout" class="text-gray-500 hover:text-red-500"><i class="fas fa-sign-out-alt"></i></button>
+      </div>
+      
+      <div id="contacts-list" class="flex-1 overflow-y-auto bg-white">
+        <div class="p-4 text-center text-gray-400 text-sm mt-10">Carregando conversas...</div>
+      </div>
+    </aside>
+
+    <main class="chat-area">
+      <div class="chat-header">
+        <div class="flex items-center">
+          <button id="btn-back" class="mr-3 md:hidden text-gray-600"><i class="fas fa-arrow-left"></i></button>
+          <div id="chat-avatar" class="avatar bg-blue-500 text-sm">?</div>
+          <div class="ml-3">
+            <div id="chat-name" class="font-bold text-gray-800">Selecione um contato</div>
+            <div id="chat-status" class="text-xs text-gray-500">...</div>
+          </div>
+        </div>
+        <div>
+            <button class="text-gray-500 p-2"><i class="fas fa-search"></i></button>
+            <button class="text-gray-500 p-2"><i class="fas fa-ellipsis-v"></i></button>
+        </div>
+      </div>
+
+      <div id="messages-area" class="messages-container flex flex-col">
+        <div class="flex items-center justify-center h-full opacity-50">
+            <div class="text-center">
+                <i class="fab fa-whatsapp text-6xl text-gray-300 mb-4"></i>
+                <p class="text-gray-500">Escolha uma conversa para começar</p>
+            </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <button class="text-gray-500 text-xl px-2"><i class="far fa-smile"></i></button>
+        <button class="text-gray-500 text-xl px-2"><i class="fas fa-paperclip"></i></button>
+        <input id="msg-input" class="chat-input" placeholder="Digite uma mensagem" disabled />
+        <button id="btn-send" class="text-gray-500 text-xl px-2"><i class="fas fa-microphone"></i></button>
+      </div>
+    </main>
+
+  </div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+  import { getFirestore, collection, query, where, onSnapshot, addDoc, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  // --- COLE SUAS CHAVES DO FIREBASE AQUI ---
+  const firebaseConfig = {
+    apiKey: "SUA_API_KEY_AQUI",
+    authDomain: "SEU_PROJECT.firebaseapp.com",
+    projectId: "SEU_PROJECT_ID",
+    storageBucket: "SEU_PROJECT.appspot.com",
+    messagingSenderId: "123...",
+    appId: "1:123..."
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  let currentUser = null;
+  let currentChatId = null;
+
+  // LOGIN
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+        currentUser = user;
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app-screen').classList.remove('hidden');
+        loadContacts(); // Carregar contatos fictícios para teste
+    } else {
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('app-screen').classList.add('hidden');
+    }
+  });
+
+  document.getElementById('btn-login').onclick = async () => {
+    try {
+        await signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value);
+    } catch (e) { document.getElementById('login-msg').textContent = "Erro: " + e.message; }
+  };
+
+  document.getElementById('btn-logout').onclick = () => signOut(auth);
+
+  // --- LÓGICA DE UI (SIMULAÇÃO) ---
+  
+  // Dados Fictícios para ver o layout funcionando
+  const mockContacts = [
+      { id: '1', name: 'Cliente João', lastMsg: 'Gostaria de um orçamento...', time: '10:30', avatar: 'J', color: 'bg-blue-500' },
+      { id: '2', name: 'Maria Silva', lastMsg: 'Obrigado!', time: 'Ontem', avatar: 'M', color: 'bg-pink-500' },
+      { id: '3', name: 'Suporte Técnico', lastMsg: 'O chamado foi aberto.', time: 'Terça', avatar: 'S', color: 'bg-green-500' }
+  ];
+
+  function loadContacts() {
+      const list = document.getElementById('contacts-list');
+      list.innerHTML = '';
+      
+      mockContacts.forEach(contact => {
+          const div = document.createElement('div');
+          div.className = 'contact-item';
+          div.onclick = () => openChat(contact);
+          div.innerHTML = `
+            <div class="avatar ${contact.color}">${contact.avatar}</div>
+            <div class="flex-1 border-b border-gray-100 pb-3">
+                <div class="flex justify-between">
+                    <span class="font-bold text-gray-800">${contact.name}</span>
+                    <span class="text-xs text-gray-400">${contact.time}</span>
+                </div>
+                <div class="text-sm text-gray-500 truncate w-48">${contact.lastMsg}</div>
+            </div>
+          `;
+          list.appendChild(div);
+      });
+  }
+
+  function openChat(contact) {
+      currentChatId = contact.id;
+      
+      // UI Mobile
+      document.body.classList.add('show-chat');
+      
+      // Header
+      document.getElementById('chat-name').textContent = contact.name;
+      document.getElementById('chat-avatar').textContent = contact.avatar;
+      document.getElementById('chat-avatar').className = `avatar ${contact.color}`;
+      document.getElementById('chat-status').textContent = 'online';
+      
+      // Habilitar Input
+      const input = document.getElementById('msg-input');
+      input.disabled = false;
+      input.focus();
+      
+      // Limpar mensagens e mostrar exemplo
+      const area = document.getElementById('messages-area');
+      area.innerHTML = `
+        <div class="msg msg-in">
+            Olá, bom dia! ${contact.lastMsg}
+            <span class="msg-time">10:30</span>
+        </div>
+        <div class="msg msg-out">
+            Olá ${contact.name}! Tudo bem? Vou verificar para você.
+            <span class="msg-time">10:32 <i class="fas fa-check-double text-blue-500"></i></span>
+        </div>
+      `;
+  }
+
+  // Voltar (Mobile)
+  document.getElementById('btn-back').onclick = () => {
+      document.body.classList.remove('show-chat');
+  };
+
+  // Enviar Mensagem (Simulação Visual)
+  const input = document.getElementById('msg-input');
+  input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && input.value.trim()) {
+          const text = input.value;
+          const area = document.getElementById('messages-area');
+          
+          const div = document.createElement('div');
+          div.className = 'msg msg-out';
+          div.innerHTML = `${text}<span class="msg-time">Agora <i class="far fa-clock"></i></span>`;
+          
+          area.appendChild(div);
+          area.scrollTop = area.scrollHeight; // Rolar para baixo
+          input.value = '';
+      }
+  });
+
+</script>
+</body>
+</html>
